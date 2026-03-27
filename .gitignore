@@ -1,0 +1,102 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Model checkpoints (keep folder structure, ignore large files)
+checkpoints/*.pth
+checkpoints/*.pt
+!checkpoints/.gitkeep
+
+# Logs
+logs/*.log
+logs/*.json
+logs/*.png
+!logs/.gitkeep
+
+# Results
+results/*.npy
+results/*.npz
+results/*.png
+results/*.txt
+results/**/*.npy
+results/**/*.npz
+results/**/*.png
+results/**/*.txt
+!results/.gitkeep
+
+# Data
+data/*.h5
+data/*.csv
+data/*.npy
+data/*.npz
+data/**/*.h5
+data/**/*.csv
+data/**/*.npy
+data/**/*.npz
+!data/.gitkeep
+
+# Training runs and model artifacts
+runs/
+**/weights/*.pth
+**/weights/*.pt
+**/weights/*.ckpt
+**/events.out.tfevents.*
+
+# Additional logs and reports
+logs/**/*.log
+logs/**/*.json
+logs/**/*.png
+logs/**/*.txt
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Documentation
+docs/_build/

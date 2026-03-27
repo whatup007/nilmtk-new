@@ -1,0 +1,605 @@
+﻿NILMTK-CONTRIB 模型结构与超参数总表（中文版）
+生成时间: 2026-03-07
+整理范围:
+- e:/pythonProject5/nilmtk-contrib-master/nilmtk_contrib/disaggregate/*.py
+- e:/pythonProject5/nilmtk-contrib-master/nilmtk_contrib/torch/*.py
+
+=====================================================================
+0) 全局预处理与滑动窗口说明
+=====================================================================
+A) TensorFlow 模型（大部分 disaggregate/*）
+- 滑动窗口长度: sequence_length（多数模型要求为奇数）
+- 典型窗口逻辑:
+  pad = sequence_length // 2
+  两端补零
+  windows = [v[i:i+sequence_length] for i in range(...)]
+- 总表（mains）归一化:
+  mains_norm = (mains - mains_mean) / mains_std
+- 电器功率（appliance）归一化:
+  app_norm = (app - app_mean) / app_std
+- 常见默认训练设置:
+  validation_split = 0.15
+  optimizer = Adam（分类混合模型除外）
+  loss = MSE（分类混合模型使用多损失）
+  保存最好模型: ModelCheckpoint(monitor='val_loss', save_best_only=True)
+
+B) PyTorch 模型（torch/*）
+- 统一预处理工具: torch/preprocessing.py
+- preprocess(...) 核心逻辑:
+  pad = sequence_length // 2
+  mains 始终做窗口化
+  appliance 仅在 windowing=True 时做窗口化，否则用点目标
+- mains 归一化:
+  (windows - mains_mean) / mains_std
+- appliance 归一化:
+  (flat 或 windows - app_mean) / app_std
+
+=====================================================================
+1) TensorFlow / Keras 模型（nilmtk_contrib/disaggregate）
+=====================================================================
+
+1.1 Seq2Point
+文件: disaggregate/seq2point.py
+可配置参数(params.get):
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+- mains_mean=1800
+- mains_std=600
+网络结构:
+- Conv1D(30,k=10,relu,s=1)
+- Conv1D(30,k=8,relu,s=1)
+- Conv1D(40,k=6,relu,s=1)
+- Conv1D(50,k=5,relu,s=1)
+- Dropout(0.2)
+- Conv1D(50,k=5,relu,s=1)
+- Dropout(0.2)
+- Flatten
+- Dense(1024,relu)
+- Dropout(0.2)
+- Dense(1)
+编译设置:
+- loss='mse', optimizer='adam'
+窗口/标签:
+- mains 训练与测试都做对称补零窗口化，步长1
+- appliance 使用点目标（非序列输出）
+
+1.2 Seq2Seq
+文件: disaggregate/seq2seq.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构:
+- Conv1D(30,k=10,relu,s=2)
+- Conv1D(30,k=8,relu,s=2)
+- Conv1D(40,k=6,relu,s=1)
+- Conv1D(50,k=5,relu,s=1)
+- Dropout(0.2)
+- Conv1D(50,k=5,relu,s=1)
+- Dropout(0.2)
+- Flatten
+- Dense(1024,relu)
+- Dropout(0.2)
+- Dense(sequence_length)
+编译设置:
+- loss='mse', optimizer='adam'
+输出方式:
+- 序列到序列
+- 推理时对重叠窗口做 overlap-add 平均
+
+1.3 RNN
+文件: disaggregate/rnn.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=19
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+- mains_mean=1800
+- mains_std=600
+网络结构:
+- Conv1D(16,k=4,activation=linear,padding=same)
+- BiLSTM(128,return_sequences=True)
+- BiLSTM(256,return_sequences=False)
+- Dense(128,tanh)
+- Dense(1,linear)
+编译设置:
+- loss='mse', optimizer='adam', metrics=['mse']
+
+1.4 RNN_attention
+文件: disaggregate/rnn_attention.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=19
+- n_epochs=10
+- batch_size=512
+- load_model_path=None
+- appliance_params={}
+- mains_mean=1800
+- mains_std=600
+网络结构:
+- Conv1D(16,k=4,linear,padding=same)
+- BiLSTM(128,return_sequences=True)
+- BiLSTM(256,return_sequences=True)
+- AttentionLayer(units=128)
+- Dense(128,tanh)
+- Dense(1,linear)
+编译设置:
+- loss='mse', optimizer='adam', metrics=['mse']
+
+1.5 WindowGRU
+文件: disaggregate/WindowGRU.py
+可配置参数:
+- save-model-path=None
+- pretrained-model-path=None
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+内部归一化常量:
+- max_val=800
+网络结构:
+- Conv1D(16,k=4,relu,padding=same)
+- BiGRU(64,relu,return_sequences=True)
+- Dropout(0.5)
+- BiGRU(128,relu,return_sequences=False)
+- Dropout(0.5)
+- Dense(128,relu)
+- Dropout(0.5)
+- Dense(1,linear)
+编译设置:
+- loss='mse', optimizer='adam'
+窗口逻辑:
+- 在尾部补 sequence_length-1 个零
+- 再通过索引矩阵构造滑动窗口
+
+1.6 DAE
+文件: disaggregate/dae.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- mains_mean=1000
+- mains_std=600
+- appliance_params={}
+- save-model-path=None
+- pretrained-model-path=None
+网络结构:
+- Conv1D(8,k=4,linear,padding=same)
+- Flatten
+- Dense(sequence_length*8,relu)
+- Dense(128,relu)
+- Dense(sequence_length*8,relu)
+- Reshape((sequence_length,8))
+- Conv1D(1,k=4,linear,padding=same)
+编译设置:
+- loss='mse', optimizer='adam'
+代码注意:
+- normalize_input() 中存在重复除以 std 的写法（会额外缩放）
+
+1.7 BERT
+文件: disaggregate/bert.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构(顺序模型):
+- Conv1D(16,k=4,linear,padding=same)
+- LPpool(pool_size=2)
+- TokenAndPositionEmbedding(maxlen=sequence_length,vocab_size=20000,embed_dim=32)
+- TransformerBlock(embed_dim=32,num_heads=2,ff_dim=32)
+- Flatten
+- Dropout(0.1)
+- Dense(sequence_length)
+- Dropout(0.1)
+编译设置:
+- loss='mse', optimizer='adam', metrics=['mse']
+
+1.8 ResNet
+文件: disaggregate/resnet.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=299
+- n_epochs=10
+- batch_size=512
+- load_model_path=None
+- appliance_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构:
+- ZeroPadding1D(3)
+- Conv1D(30,k=48,s=2,relu)
+- BatchNorm
+- ReLU
+- MaxPooling1D(3,s=2)
+- convolution_block([30,30,30],k=24)
+- identity_block([30,30,30],k=12)
+- identity_block([30,30,30],k=6)
+- Flatten
+- Dense(1024,relu)
+- Dropout(0.2)
+- Dense(sequence_length,linear)
+编译设置:
+- loss='mse', optimizer='adam'
+
+1.9 ResNet_classification
+文件: disaggregate/resnet_classification.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+- mains_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构:
+- 分类分支:
+  Conv1D(30,10,relu) -> Conv1D(30,8,relu) -> Conv1D(40,6,relu)
+  -> Conv1D(50,5,relu) x3 -> Flatten -> Dense(1024,relu)
+  -> Dense(sequence_length,sigmoid)
+- 回归分支:
+  ZeroPadding1D(3) -> Conv1D(30,48,s=2,relu) -> BN -> ReLU -> MaxPool
+  -> 残差块 -> Flatten -> Dense(1024,relu) -> Dropout(0.2)
+  -> Dense(sequence_length,linear)
+- 最终输出:
+  Multiply(回归输出, 分类输出)
+编译设置:
+- optimizer=SGD(lr=0.01,momentum=0.9)
+- losses={output: MSE, classification_output: BinaryCrossentropy}
+分类阈值:
+- THRESHOLD=15（用于开关标签）
+
+1.10 RNN_attention_classification
+文件: disaggregate/rnn_attention_classification.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+- mains_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构:
+- 分类分支:
+  Conv1D(30,10,relu) -> Conv1D(30,8,relu) -> Conv1D(40,6,relu)
+  -> Conv1D(50,5,relu) x3 -> Flatten -> Dense(1024,relu)
+  -> Dense(sequence_length,sigmoid)
+- 回归分支:
+  Conv1D(16,4,linear,padding=same)
+  -> BiLSTM(128,return_sequences=True)
+  -> BiLSTM(256,return_sequences=True)
+  -> AttentionLayer(units=128)
+  -> Dense(128,tanh)
+  -> Dense(sequence_length,linear)
+- 最终输出:
+  Multiply(回归输出, 分类输出)
+编译设置:
+- optimizer=SGD(lr=0.01,momentum=0.9)
+- losses={output: MSE, classification_output: BinaryCrossentropy}
+分类阈值:
+- THRESHOLD=15
+
+1.11 AFHMM（非深度学习）
+文件: disaggregate/afhmm.py
+可配置参数:
+- time_period=720
+- default_num_states=2
+- save-model-path=None
+- pretrained-model-path=None
+方法说明:
+- 每个电器拟合 GaussianHMM
+- 结合凸优化进行分解
+
+1.12 AFHMM_SAC（非深度学习）
+文件: disaggregate/afhmm_sac.py
+可配置参数:
+- time_period=720
+- default_num_states=2
+- save-model-path=None
+- pretrained-model-path=None
+方法说明:
+- AFHMM 的带信号聚合约束版本
+
+1.13 DSC（非深度学习字典学习）
+文件: disaggregate/dsc.py
+可配置参数:
+- shape=120
+- learning_rate=1e-9
+- iterations=3000
+- n_components=10
+内部重要参数:
+- sparsity_coef=20
+方法说明:
+- MiniBatchDictionaryLearning + SparseCoder + 判别式更新
+
+=====================================================================
+2) PyTorch 模型（nilmtk_contrib/torch）
+=====================================================================
+
+2.1 Seq2PointTorch
+文件: torch/seq2point.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+- mains_mean=1800
+- mains_std=600
+网络结构:
+- Conv1d(1,30,k=10) -> ReLU
+- Conv1d(30,30,k=8) -> ReLU
+- Conv1d(30,40,k=6) -> ReLU
+- Conv1d(40,50,k=5) -> ReLU
+- Dropout(0.2)
+- Conv1d(50,50,k=5) -> ReLU
+- Dropout(0.2)
+- Flatten
+- Linear(50*(seq_len-29),1024) -> ReLU -> Dropout(0.2)
+- Linear(1024,1)
+训练设置:
+- optimizer=Adam(默认学习率)
+- loss=MSELoss
+- train/val 约 85/15 划分
+
+2.2 Seq2Seq
+文件: torch/seq2seq.py
+可配置参数:
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构:
+- Conv1d(1,30,k=10,s=2)
+- Conv1d(30,30,k=8,s=2)
+- Conv1d(30,40,k=6,s=1)
+- Conv1d(40,50,k=5,s=1)
+- Dropout(0.2)
+- Conv1d(50,50,k=5,s=1)
+- Dropout(0.2)
+- Flatten
+- Linear(flat,1024) -> ReLU -> Dropout(0.2)
+- Linear(1024,sequence_length)
+训练设置:
+- optimizer=Adam(默认学习率)
+- loss=MSELoss
+推理说明:
+- 使用 overlap-add 对窗口输出做平均重建
+
+2.3 RNN
+文件: torch/rnn.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=19
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+- mains_mean=1800
+- mains_std=600
+网络结构(RNNModel):
+- Conv1d(1,16,k=4,padding=same)
+- LSTM(input=16, hidden=128, bidirectional, return_sequences)
+- LSTM(input=256, hidden=256, bidirectional)
+- Dense(512->128,tanh)
+- Dropout
+- Dense(128->1)
+训练设置:
+- optimizer=Adam(lr=0.001)
+- loss=MSELoss
+- 保存验证集最优权重
+
+2.4 RNN_attention
+文件: torch/rnn_attention.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=19
+- n_epochs=10
+- batch_size=512
+- load_model_path=None
+- appliance_params={}
+- mains_mean=1800
+- mains_std=600
+网络结构(RNNAttentionModel):
+- Conv1d(1,16,k=4,padding=same)
+- BiLSTM(128, return_sequences)
+- BiLSTM(256, return_sequences)
+- 注意力层(Attention)
+- Dense(512->128,tanh)
+- Dropout
+- Dense(128->1)
+训练设置:
+- optimizer=Adam(lr=0.001)
+- loss=MSELoss
+
+2.5 WindowGRU
+文件: torch/WindowGRU.py
+可配置参数:
+- save-model-path=None
+- pretrained-model-path=None
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+内部归一化常量:
+- max_val=800
+网络结构(GRUNet):
+- Conv1d(1,16,k=4,padding=2) -> ReLU
+- BiGRU(16->64)
+- Dropout(0.5)
+- BiGRU(128->128)
+- Dropout(0.5)
+- Dense(256->128)
+- Dropout(0.5)
+- Dense(128->1)
+训练设置:
+- optimizer=Adam(lr=1e-3)
+- loss=MSELoss
+
+2.6 DAE
+文件: torch/dae.py
+可配置参数:
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- mains_mean=1000
+- mains_std=600
+- appliance_params={}
+- save-model-path=None
+- pretrained-model-path=None
+网络结构(DAEModel):
+- Conv1d(1,8,k=4,padding=same)
+- Flatten
+- Linear(seq_len*8 -> seq_len*8) -> ReLU
+- Linear(seq_len*8 -> 128) -> ReLU
+- Linear(128 -> seq_len*8) -> ReLU
+- reshape 到 (8,seq_len)
+- Conv1d(8,1,k=4,padding=same)
+训练设置:
+- optimizer=Adam(默认学习率)
+- loss=MSELoss
+
+2.7 BERT
+文件: torch/bert.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+- appliance_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构:
+- Permute
+- Conv1d(1,embed_dim=32,k=4,padding=same)
+- LPpool(pool_size=2)
+- PositionalEncoding(embed_dim=32,maxlen=49)
+- TransformerBlock(embed_dim=32,num_heads=2,ff_dim=32)
+- Flatten -> Dropout(0.1)
+- Linear(49*32 -> sequence_length) -> Dropout(0.1)
+训练设置:
+- optimizer=Adam(默认学习率)
+- loss=MSELoss
+
+2.8 ResNet
+文件: torch/resnet.py
+可配置参数:
+- chunk_wise_training=False
+- sequence_length=299
+- n_epochs=10
+- batch_size=512
+- load_model_path=None
+- appliance_params={}
+类内固定值:
+- mains_mean=1800, mains_std=600
+网络结构(ResNetModel):
+- pad -> Conv1d(1,30,k=48,s=2) -> BN -> ReLU -> MaxPool
+- 残差 conv_block + identity_block 组合
+- Flatten -> Dense(1024,relu) -> Dropout(0.2)
+- Dense(sequence_length)
+训练设置:
+- optimizer=Adam(默认学习率)
+- loss=MSELoss
+
+2.9 ResNet_classification
+文件: torch/resnet_classification.py
+可配置参数:
+- chunk_wise_training=True
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+内部统计:
+- mains_mean,mains_std 初始固定，训练时会按数据重算
+网络结构(_ResNetNet):
+- 分类分支(CNN堆叠 -> sigmoid 序列)
+- 回归分支(ResNet骨干 -> linear 序列)
+- 最终输出 = 回归 * 分类
+训练设置:
+- optimizer=SGD(lr=0.01,momentum=0.9)
+- losses = MSE(回归) + BCELoss(分类)
+
+2.10 RNN_attention_classification
+文件: torch/rnn_attention_classification.py
+可配置参数:
+- chunk_wise_training=True
+- sequence_length=99
+- n_epochs=10
+- batch_size=512
+网络结构(_RNNAttNet):
+- 分类分支(CNN堆叠 -> sigmoid 序列)
+- 回归分支:
+  Conv1d -> BiLSTM -> BiLSTM -> Attention -> Dense -> linear 序列
+- 最终输出 = 回归 * 分类
+训练设置:
+- optimizer=SGD(lr=0.01,momentum=0.9)
+- losses = MSE(回归) + BCELoss(分类)
+- 分类标签阈值通常约为 15W
+
+=====================================================================
+3) 快速参考: 常见可调权重与训练超参数
+=====================================================================
+多数模型常见可调参数:
+- sequence_length
+- n_epochs
+- batch_size
+- mains_mean, mains_std
+- appliance_params
+- chunk_wise_training
+
+部分模型专属参数:
+- save-model-path / pretrained-model-path（DAE、WindowGRU、AFHMM 系列）
+- load_model_path（部分 RNN/ResNet 变体）
+- mains_params（分类混合模型）
+- default_num_states, time_period（AFHMM/AFHMM_SAC）
+- shape, learning_rate, iterations, n_components（DSC）
+
+很多模型中的固定或半固定训练逻辑:
+- validation_split = 0.15
+- optimizer = Adam 默认学习率（分类混合常见 SGD 0.01）
+- 大多数 TF 基线模型没有通用 EarlyStopping
+- 通过验证集最优权重保存并回载
+
+=====================================================================
+4) 源文件索引
+=====================================================================
+TensorFlow/Keras (disaggregate):
+- afhmm.py
+- afhmm_sac.py
+- bert.py
+- dae.py
+- dsc.py
+- resnet.py
+- resnet_classification.py
+- rnn.py
+- rnn_attention.py
+- rnn_attention_classification.py
+- seq2point.py
+- seq2seq.py
+- WindowGRU.py
+
+PyTorch (torch):
+- bert.py
+- dae.py
+- preprocessing.py
+- resnet.py
+- resnet_classification.py
+- rnn.py
+- rnn_attention.py
+- rnn_attention_classification.py
+- seq2point.py
+- seq2seq.py
+- WindowGRU.py

@@ -1,0 +1,30 @@
+# Core dependencies for NILM Seq2Point project
+# Most packages are already installed in your environment
+
+# Deep Learning
+torch>=2.0.0
+# tensorflow>=2.15.0  # Optional, if using TensorFlow backend
+
+# Data Processing
+numpy>=1.26.0
+pandas>=2.2.0
+h5py>=3.8.0
+tables>=3.9.0
+
+# NILM specific
+nilmtk>=0.4.0
+nilmtk-contrib>=0.1.0
+nilm-metadata>=0.2.0
+
+# Machine Learning
+scikit-learn>=1.3.0
+scipy>=1.10.0
+
+# Visualization
+matplotlib>=3.8.0
+
+# Configuration
+PyYAML>=6.0.0
+
+# Utilities
+tqdm>=4.65.0

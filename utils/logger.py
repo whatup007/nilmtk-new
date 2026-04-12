@@ -223,7 +223,7 @@ class TrainingLogger:
         
         print(f"Training history plot saved to {save_path}")
     
-    def plot_metrics(self, metrics_to_plot: list = ['mae', 'rmse'], save_path: str = None):
+    def plot_metrics(self, metrics_to_plot: list = ['mae', 'rmse', 'rae'], save_path: str = None):
         """
         绘制指定指标随 epoch 的变化。
         
@@ -514,9 +514,18 @@ def plot_relative_error_metrics(
     """绘制相对误差指标"""
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     
+    # 相对误差指标
     rae = metrics.get('rae', 0)
     rse = metrics.get('rse', 0)
     mape = metrics.get('mape', 0)
+    
+    # 如果没有计算过这些指标，则尝试计算（为了兼容旧实验）
+    if rae == 0 and rse == 0 and mape == 0 and 'y_true' in metrics and 'y_pred' in metrics:
+        from .metrics import compute_relative_error_metrics
+        rel_metrics = compute_relative_error_metrics(metrics['y_true'], metrics['y_pred'])
+        rae = rel_metrics['rae']
+        rse = rel_metrics['rse']
+        mape = rel_metrics['mape']
     
     if rae == 0 and rse == 0 and mape == 0:
         print("No relative error data available")

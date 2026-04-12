@@ -82,6 +82,63 @@ def create_optimizer(
     raise ValueError(f"未知的优化器: {optimizer_name}")
 
 
+def resolve_resume_path(resume: str) -> str:
+    """Resolve --resume input to a concrete checkpoint file when possible."""
+    if not resume:
+        return resume
+
+    normalized = os.path.normpath(resume)
+    if os.path.isfile(normalized):
+        return normalized
+
+    candidates = []
+
+    if os.path.isdir(normalized):
+        candidates.extend([
+            os.path.join(normalized, 'weights', 'last.pth'),
+            os.path.join(normalized, 'weights', 'best.pth'),
+            os.path.join(normalized, 'weights', 'best_metrics.pth'),
+            os.path.join(normalized, 'last.pth'),
+        ])
+
+    base_name = os.path.basename(normalized)
+    if base_name.startswith('exp') and base_name[3:].isdigit():
+        exp_dir = os.path.join('runs', base_name)
+        candidates.extend([
+            os.path.join(exp_dir, 'weights', 'last.pth'),
+            os.path.join(exp_dir, 'weights', 'best.pth'),
+            os.path.join(exp_dir, 'weights', 'best_metrics.pth'),
+        ])
+
+    if not normalized.lower().endswith('.pth'):
+        candidates.append(normalized + '.pth')
+
+    for candidate in candidates:
+        if os.path.isfile(candidate):
+            return candidate
+
+    return normalized
+
+
+def infer_config_from_resume(config_path: str, resume: str) -> str:
+    """When using default config, infer experiment config next to checkpoint."""
+    if not resume:
+        return config_path
+
+    normalized_config = os.path.normpath(config_path)
+    default_config = os.path.normpath(os.path.join('configs', 'config.yaml'))
+    if normalized_config != default_config:
+        return config_path
+
+    checkpoint_dir = os.path.dirname(os.path.normpath(resume))
+    exp_dir = os.path.dirname(checkpoint_dir)
+    candidate = os.path.join(exp_dir, 'config.yaml')
+    if os.path.isfile(candidate):
+        return candidate
+
+    return config_path
+
+
 def train_epoch(
     model: nn.Module,
     dataloader: torch.utils.data.DataLoader,
@@ -681,6 +738,25 @@ def train(config_path: str, resume: str = None, **kwargs):
             dim_feedforward=transformer_cfg.get('dim_feedforward', 256),
             dropout_rate=transformer_cfg.get('dropout_rate', config['model'].get('dropout_rate', 0.1))
         )
+    elif model_name == 'seq2point_lstm':
+        lstm_cfg = config['model'].get('lstm', {})
+        model = get_model(
+            model_name=model_name,
+            input_size=config['model']['input_size'],
+            hidden_size=lstm_cfg.get('hidden_size', 128),
+            num_layers=lstm_cfg.get('num_layers', 2),
+            dropout_rate=lstm_cfg.get('dropout_rate', config['model'].get('dropout_rate', 0.1)),
+            bidirectional=lstm_cfg.get('bidirectional', False)
+        )
+    elif model_name == 'seq2point_bilstm':
+        bilstm_cfg = config['model'].get('bilstm', {})
+        model = get_model(
+            model_name=model_name,
+            input_size=config['model']['input_size'],
+            hidden_size=bilstm_cfg.get('hidden_size', 128),
+            num_layers=bilstm_cfg.get('num_layers', 2),
+            dropout_rate=bilstm_cfg.get('dropout_rate', config['model'].get('dropout_rate', 0.1))
+        )
     else:
         model = get_model(
             model_name=model_name,
@@ -811,6 +887,7 @@ def train(config_path: str, resume: str = None, **kwargs):
             logger.info(
                 f"最佳综合指标！综合评分: {current_composite_score:.6f} "
                 f"(MAE: {val_metrics['mae']:.4f}, RMSE: {val_metrics['rmse']:.4f}, "
+                f"RAE: {val_metrics.get('rae', 0.0):.4f}, "
                 f"F1: {val_metrics['f1']:.4f}, R²: {val_metrics['r2_score']:.4f}, "
                 f"能量准确度: {val_metrics['energy_accuracy']:.4f})"
             )
@@ -926,7 +1003,7 @@ def main():
     
     # 配置参数
     parser.add_argument('--config',type=str,default='configs/config.yaml',help='配置文件路径')
-    parser.add_argument('--resume',type=str,default=None,help='要恢复的检查点路径')
+    parser.add_argument('--resume',type=str,default=None,help='要恢复的检查点路径（支持 runs/expN、expN 或具体 .pth 文件）')
     
     # 数据参数
     parser.add_argument('--data-path',type=str,default=None,help='HDF5数据文件路径')
@@ -960,7 +1037,29 @@ def main():
     kwargs = {k: v for k, v in vars(args).items() 
               if v is not None and k not in ['config', 'resume']}
     
-    train(args.config, args.resume, **kwargs)
+    resolved_resume = resolve_resume_path(args.resume) if args.resume else None
+    if args.resume and resolved_resume != args.resume:
+        print(f"Info: --resume 已解析为检查点文件: {resolved_resume}")
+
+    resolved_config = infer_config_from_resume(args.config, resolved_resume)
+    if resolved_config != args.config:
+        print(
+            f"Info: 检测到恢复训练，自动切换配置为: {resolved_config} "
+            f"(原始: {args.config})"
+        )
+
+    cleanup_data_path = None
+    try:
+        preview_config = load_config(resolved_config)
+        cleanup_data_path = preview_config.get('data', {}).get('data_path')
+    except Exception:
+        cleanup_data_path = None
+
+    try:
+        train(resolved_config, resolved_resume, **kwargs)
+    finally:
+        # 防止 Ctrl+C 或异常时遗留 nilmtk 临时 HDF5 句柄
+        NILMDataLoader._cleanup_nilmtk_temp_handles(cleanup_data_path)
 
 
 if __name__ == '__main__':

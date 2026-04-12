@@ -75,6 +75,9 @@ def compute_metrics(
     ss_tot = np.sum((y_true - y_true_mean) ** 2)
     r2_score = 1 - (ss_res / (ss_tot + 1e-10))
     
+    # 相对误差指标
+    relative_metrics = compute_relative_error_metrics(y_true, y_pred)
+    
     metrics = {
         'mae': mae,
         'mse': mse,
@@ -87,10 +90,18 @@ def compute_metrics(
         'f1': f1,
         'energy_accuracy': energy_accuracy,
         'r2_score': r2_score,
+        'rae': relative_metrics['rae'],
+        'rse': relative_metrics['rse'],
+        'mape': relative_metrics['mape'],
         'total_energy_true': total_energy_true,
-        'total_energy_pred': total_energy_pred
+        'total_energy_pred': total_energy_pred,
+        # 混淆矩阵元素
+        'tp': int(tp),
+        'fp': int(fp),
+        'fn': int(fn),
+        'tn': int(tn)
     }
-    
+
     return metrics
 
 
@@ -165,6 +176,7 @@ def print_metrics(metrics: Dict[str, float], prefix: str = ""):
     print(f"Recall:          {metrics['recall']:.4f}")
     print(f"F1 Score:        {metrics['f1']:.4f}")
     print(f"R² Score:        {metrics.get('r2_score', 0.0):.4f}")
+    print(f"RAE:             {metrics.get('rae', 0.0):.4f}")
     print(f"Energy Accuracy: {metrics['energy_accuracy']:.4f}")
     
     # 计算并打印综合评分

@@ -174,6 +174,7 @@ def plot_comprehensive_evaluation(
     评估指标：
     • MAE: {mae:.2f} W
     • RMSE: {rmse:.2f} W
+    • RAE: {metrics.get('rae', 0.0):.4f}
     • 准确率：{metrics.get('accuracy', 0):.4f}
     • 能量准确度：{metrics.get('energy_accuracy', 0):.4f}
     """
@@ -446,8 +447,9 @@ def plot_evaluation_metrics(
             appliance=appliance
         )
     
-    # 2. 状态识别性能
-    if metrics.get('f1', 0) > 0 or metrics.get('precision', 0) > 0:
+    # 2. 状态识别性能（包含混淆矩阵）
+    # 只要有 tp/fp/fn/tn 数据就生成，不判断 f1 是否大于 0
+    if 'tp' in metrics and 'fp' in metrics and 'fn' in metrics and 'tn' in metrics:
         plot_state_recognition(
             metrics,
             save_path=os.path.join(output_dir, f'02_{appliance}_state_recognition.png'),

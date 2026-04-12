@@ -1,17 +1,17 @@
-# Seq2Point Transformer 单模型训练配置
-# 基于 config.yaml，仅调整为单独 Transformer 训练
+# 双向 LSTM (BiLSTM) 配置文件
+# 用于训练 Seq2Point 双向 LSTM 模型
 
 # ============================================================================
 # 📊 数据设置
 # ============================================================================
 data:
   dataset: 'redd'  # 数据集选项：'redd' REDD数据集，'ukdale' UK-DALE数据集
-  data_path: 'data/redd-fridge-seq2point-2_3_4_5_6.h5'  # 数据文件路径
-  appliance: 'fridge'  # 目标电器设备（冰箱）
+  data_path: 'data/redd.h5'  # 数据文件路径
+  appliance: 'fridge'  # 目标电器设备（与 exp33 对比，使用相同电器）
   building: 1  # 建筑物编号
 
   # 📌 采样参数
-  sampling_period: 1  # 采样周期（秒）：采样间隔
+  sampling_period: 1  # 采样周期（秒）
   window_size: 599  # 输入序列长度（样本数）
   window_stride: 1  # 滑动窗口步长
 
@@ -19,79 +19,79 @@ data:
   test_buildings: [1]  # 测试集使用的建筑物ID
 
   # 📌 数据归一化参数（z-score标准化）
-  normalize: True
-  mean: 0.0
-  std: 1.0
+  normalize: True  # 是否进行数据归一化
+  mean: 0.0  # 归一化均值
+  std: 1.0  # 归一化标准差
 
 # ============================================================================
 # 🤖 模型设置
 # ============================================================================
 model:
-  name: 'transformer'  # 单独 Transformer 模型（等价于 seq2point_transformer）
-  input_size: 599  # 模型输入大小（样本数）
-  output_size: 1  # 模型输出大小（预测功率值）
-  dropout_rate: 0.2  # Dropout比率（防止过拟合）
+  name: 'seq2point_bilstm'  # 使用 BiLSTM 模型
+  input_size: 599  # 模型输入大小
+  output_size: 1  # 模型输出大小
 
-  transformer:
-    input_size: 599  # Transformer输入大小（与窗口长度一致）
-    d_model: 64  # Transformer隐层维度
-    nhead: 4  # 多头注意力头数
-    num_layers: 2  # Transformer编码层数
-    dim_feedforward: 128  # 前馈网络维度
-    dropout_rate: 0.2  # Transformer Dropout比率
+  # 📌 BiLSTM 特定参数
+  bilstm:
+    hidden_size: 128  # BiLSTM 隐藏层维度（每个方向）
+    num_layers: 2  # BiLSTM 层数
+    dropout_rate: 0.5  # Dropout比率
 
 # ============================================================================
 # 🏋️ 训练设置
 # ============================================================================
 training:
-  mode: 'single'  # 单模型训练
-  batch_size: 512  # 批处理大小
+  mode: 'single'  # 训练模式：单模型
+  batch_size: 128  # 批处理大小
   epochs: 300  # 总训练轮次
-  learning_rate: 0.001  # 初始学习率
-  optimizer: 'adam'  # 优化器：'adam' Adam，'sgd' SGD，'rmsprop' RMSProp
-  loss_function: 'mse'  # 损失函数：'mse' 均方误差，'mae' 平均绝对误差
+  learning_rate: 0.001  # 学习率
+  optimizer: 'adam'  # 优化器
+  loss_function: 'mse'  # 损失函数
 
+  # 📌 早停机制
   early_stopping: True  # 是否启用早停
-  patience: 15  # 早停耐心值：验证损失不改进的轮数阈值
+  patience: 15  # 早停耐心值
 
+  # 📌 学习率衰减策略
   lr_schedule: True  # 是否启用学习率衰减
-  lr_decay_factor: 0.5  # 学习率衰减因子（新学习率 = 旧学习率 × 因子）
-  lr_decay_patience: 5  # 衰减耐心值：多少轮后触发衰减
+  lr_decay_factor: 0.5  # 学习率衰减因子
+  lr_decay_patience: 7  # 衰减耐心值
 
+  # 📌 模型检查点保存设置
   save_best_only: True  # 是否仅保存最优模型
-  save_frequency: 5  # 保存频率：每N个epoch保存一次
+  save_frequency: 5  # 保存频率
 
 # ============================================================================
 # ✅ 验证设置
 # ============================================================================
 validation:
-  val_split: 0.2
-  shuffle: True
+  val_split: 0.15  # 验证集比例
+  shuffle: True  # 是否打乱数据顺序
 
 # ============================================================================
 # 📈 评估设置
 # ============================================================================
 evaluation:
-  metrics: ['mae', 'mse', 'rmse', 'accuracy']
-  threshold: 10
+  metrics: ['mae', 'mse', 'rmse', 'accuracy']  # 评估指标列表
+  threshold: 10  # 开关状态功率阈值（W）
 
 # ============================================================================
 # 📝 日志设置
 # ============================================================================
 logging:
-  log_dir: 'logs'
-  tensorboard: True
-  save_predictions: True
+  log_dir: 'logs'  # 日志输出目录
+  tensorboard: True  # 是否使用TensorBoard可视化
+  save_predictions: True  # 是否保存预测结果
 
 # ============================================================================
 # 💻 设备设置
 # ============================================================================
 device:
-  gpu: True
-  gpu_id: 0
-  num_workers: 4
+  gpu: True  # 是否使用GPU加速
+  gpu_id: 0  # GPU设备ID
+  num_workers: 4  # 数据加载的工作进程数
 
 # ============================================================================
 # 🎲 随机种子
 # ============================================================================
-seed: 42
+seed: 42  # 随机数种子

@@ -35,7 +35,7 @@ model:
   name: 'seq2point'  # 模型类型：'seq2point' CNN模型，'seq2point_lstm' LSTM模型，'parallel' 并行模型
   input_size: 599  # 模型输入大小（样本数）
   output_size: 1  # 模型输出大小（预测功率值）
-  dropout_rate: 0.2 # Dropout比率（防止过拟合）
+  dropout_rate: 0 # Dropout比率（防止过拟合）
   
   # 📌 并行模式子模型配置
   seq2point:
@@ -44,10 +44,10 @@ model:
 
   transformer:
     input_size: 599  # Transformer模型输入大小
-    d_model: 128  # 模型维度
+    d_model: 64  # 模型维度（降低以节省内存）
     nhead: 4  # 多头注意力头数
-    num_layers: 4  # Transformer编码层数
-    dim_feedforward: 256  # 前馈网络维度
+    num_layers: 3  # Transformer编码层数（降低层数）
+    dim_feedforward: 128  # 前馈网络维度（降低）
     dropout_rate: 0.2  # Transformer Dropout比率
   
 # ============================================================================
@@ -55,7 +55,7 @@ model:
 # ============================================================================
 training:
   mode: 'single'  # 训练模式：'single' 单模型，'parallel' 双模型并行
-  batch_size: 2048  # 批处理大小
+  batch_size: 2048  # 批处理大小（Transformer需要较小的batch_size）
   epochs: 300  # 总训练轮次
   learning_rate: 0.001  # 学习率（单模型模式）
   optimizer: 'adam'  # 优化器：'adam' Adam，'sgd' SGD，'rmsprop' RMSProp
@@ -94,7 +94,7 @@ validation:
 # 📈 评估设置
 # ============================================================================
 evaluation:
-  metrics: ['mae', 'mse', 'rmse', 'accuracy']  # 评估指标列表
+  metrics: ['mae', 'mse', 'rmse', 'accuracy', 'sae']  # 评估指标列表
   threshold: 10  # 开关状态功率阈值（W）：功率高于此值判定为"开"
   
 # ============================================================================

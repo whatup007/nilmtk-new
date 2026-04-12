@@ -59,6 +59,12 @@ results/**/*.png
 results/**/*.txt
 !results/.gitkeep
 
+# Ensemble data
+ensemble_data/*.npz
+ensemble_data/*.png
+ensemble_data/*.log
+!ensemble_data/.gitkeep
+
 # Data
 data/*.h5
 data/*.csv

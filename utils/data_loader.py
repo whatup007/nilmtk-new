@@ -412,7 +412,8 @@ def create_dataloaders(
     batch_size: int = 256,
     val_split: float = 0.1,
     num_workers: int = 4,
-    shuffle: bool = True
+    shuffle: bool = True,
+    pin_memory: bool = None
 ) -> dict:
     """
     创建训练、验证和测试数据加载器。
@@ -425,10 +426,14 @@ def create_dataloaders(
         val_split: 验证集比例
         num_workers: 数据加载线程数
         shuffle: 是否打乱训练数据
+        pin_memory: 是否开启 pin_memory，默认自动判断 (torch.cuda.is_available())
         
     Returns:
         包含 'train'/'val'/'test' 的字典
     """
+    if pin_memory is None:
+        pin_memory = torch.cuda.is_available()
+    
     # 加载训练数据
     X_train, y_train = data_loader.load_data(train_buildings, normalize=True)
     
@@ -460,21 +465,21 @@ def create_dataloaders(
             batch_size=batch_size,
             shuffle=shuffle,
             num_workers=num_workers,
-            pin_memory=torch.cuda.is_available()
+            pin_memory=pin_memory
         ),
         'val': DataLoader(
             val_dataset,
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
-            pin_memory=torch.cuda.is_available()
+            pin_memory=pin_memory
         ),
         'test': DataLoader(
             test_dataset,
             batch_size=batch_size,
             shuffle=False,
             num_workers=num_workers,
-            pin_memory=torch.cuda.is_available()
+            pin_memory=pin_memory
         )
     }
     
